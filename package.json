@@ -1,0 +1,39 @@
+{
+  "name": "kaler-dev",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "prestart": "npm run compile",
+    "start": "node dist/app.js",
+    "clean": "rm -rf dist/",
+    "precompile": "npm run clean",
+    "compile": "./node_modules/.bin/tsc",
+    "lint": "./node_modules/.bin/tslint --project tsconfig.json && echo 'lint OK'",
+    "pretest": "npm run compile",
+    "test": "./node_modules/.bin/mocha dist/ --recursive --ui tdd"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "pre-commit": [
+    "lint",
+    "test"
+  ],
+  "devDependencies": {
+    "@types/chai": "^4.0.2",
+    "@types/lodash": "^4.14.71",
+    "@types/mocha": "^2.2.41",
+    "@types/moment": "^2.13.0",
+    "@types/node": "^8.0.19",
+    "chai": "^4.1.0",
+    "lodash": "^4.17.4",
+    "mocha": "^3.5.0",
+    "pre-commit": "^1.2.2",
+    "tslint": "^5.5.0",
+    "typescript": "^2.4.2"
+  },
+  "dependencies": {
+    "moment": "^2.18.1"
+  }
+}
