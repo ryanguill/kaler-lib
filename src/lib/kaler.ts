@@ -22,24 +22,27 @@ function excelColumnNameForIndex (idx : number) : string {
 }
 
 interface ParseConfig {
-	firstLineHeaders: boolean
+	firstLineHeaders: boolean;
+	convertNull: boolean;
+	convertEmptyString: boolean;
 }
 
-type ParseResultColumn = {
-	name: string,
-	type: string
+interface ParseResultColumn {
+	name: string;
+	type: string;
 }
 
-type ParseResult = {
-	data: any[],
-	headers: ParseResultColumn[]
+interface ParseResult {
+	data: any[];
+	headers: ParseResultColumn[];
 }
 
 
 function determineBestDataTypeForColumn (input: any[], column: ParseResultColumn) : ParseResultColumn {
 	//slice out just that one columns worth of data
-	const data = input.map(row => row[column.name]);
-	console.log({data});
+	const data = input.map(row => row[column.name])
+		.filter(cell => cell !== null); //remove nulls so it doesn't skew results
+
 
 	//possible datatypes: varchar | numeric | datetime | boolean
 
@@ -90,7 +93,12 @@ function parseTabDelim (input : String, config : ParseConfig) : ParseResult {
 
 	output = output.map(function (row : string[]) {
 		const rowObj : any = {};
-		row.forEach(function (cell : string, idx : number) {
+		row.forEach(function (cell : string | null, idx : number) {
+			if (config.convertEmptyString && typeof cell === 'string' && cell.toUpperCase() === 'EMPTYSTRING') {
+				cell = '';
+			} else if (config.convertNull && typeof cell === 'string' && cell.toUpperCase() === 'NULL') {
+				cell = null;
+			}
 			rowObj[headers[idx]['name']] = cell;
 		});
 		return rowObj;
@@ -104,6 +112,9 @@ function parseTabDelim (input : String, config : ParseConfig) : ParseResult {
 			const header = headers.find(header => header.name === key);
 			if (header === undefined) {
 				//should never happen but have to handle the possibility
+				return value;
+			}
+			if (value === null) {
 				return value;
 			}
 			if (header.type === 'boolean') {
@@ -138,6 +149,10 @@ function toPgInsert (input : ParseResult, tableName : string = 'tableName') : st
 			}
 			//console.log({col, key, value});
 
+			if (value === null) {
+				return `NULL`;
+			}
+
 			if (col.type === 'boolean') {
 				if (value) {
 					return `TRUE`;
@@ -167,7 +182,7 @@ function toPgInsert (input : ParseResult, tableName : string = 'tableName') : st
 		return `${column.name} ${type}`;
 	}
 
-	const output = `
+	return `
 DROP TABLE IF EXISTS ${tableName} CASCADE;
 CREATE TABLE ${tableName} (
 	 ${input.headers.map(header => {
@@ -178,8 +193,6 @@ CREATE TABLE ${tableName} (
 INSERT INTO ${tableName} ( ${_.map(input.headers, 'name').join(', ')} ) VALUES
   ${input.data.map(row => rowTemplate(row, input.headers)).join('\n, ')}
 ;`;
-
-	return output;
 }
 
 /*
@@ -201,21 +214,65 @@ if (process.argv.length > 1 && process.argv[1].includes('mocha')) {
 3	c	March	2003-01-01	1	3
 4	d	April	2004-01-01	0	4
 5	e	May	2005-01-01	true	5
-5	f	June	2006-01-01	false	6
-6	g	July	2007-01-01	TRUE	7
-7	h	August	2008-01-01	FALSE	8
-8	i	September	2009-01-01	TRUE	9
-9	j	October	2010-01-01	FALSE	10
-10	k	November	2011-01-01	TRUE	a`;
+6	f	June	2006-01-01	false	6
+7	g	July	2007-01-01	TRUE	7
+8	h	August	2008-01-01	FALSE	8
+9	i	September	2009-01-01	TRUE	9
+10	j	October	2010-01-01	FALSE	10
+11	k	November	2011-01-01	TRUE	a`;
 
 			const output = parseTabDelim(input, {
-				firstLineHeaders: true
+				firstLineHeaders: true,
+				convertNull: true,
+				convertEmptyString: true
 			});
 
-			console.log(util.inspect(output));
+			expect(output).to.be.an('object');
+			expect(output).to.have.keys(['data','headers']);
+			expect(output.data).to.be.an('array');
+			expect(output.data).to.have.lengthOf(11);
 
-			console.log(toPgInsert(output));
+			//console.log(util.inspect(output));
 
+			//console.log(toPgInsert(output));
+
+		});
+
+		test('parseTabDelim_emptystring', async function () {
+					const input = `a	b	c	d	e	f
+1	a	January	2001-01-01	TRUE	1
+2	b	emptystring	2002-01-01	FALSE	2
+3	c		2003-01-01	1	3`;
+
+			const output = parseTabDelim(input, {
+				firstLineHeaders: true,
+				convertNull: true,
+				convertEmptyString: true
+			});
+
+			expect(output.data[1].c).to.equal('');
+			expect(output.data[2].c).to.equal('');
+		});
+
+		test('parseTabDelim_null', async function () {
+					const input = `a	b	c	d	e	f
+null	a	January	2001-01-01	TRUE	1
+2	b	null	2002-01-01	FALSE	2
+3	c		null	1	3`;
+
+			const output = parseTabDelim(input, {
+				firstLineHeaders: true,
+				convertNull: true,
+				convertEmptyString: true
+			});
+
+//console.log(util.inspect(output));
+//console.log(toPgInsert(output));
+
+
+			expect(output.data[0].a).to.equal(null);
+			expect(output.data[1].c).to.equal(null);
+			expect(output.data[2].d).to.equal(null);
 		});
 
 
