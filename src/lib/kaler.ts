@@ -13,12 +13,6 @@ function excelColumnNameForIndex (idx : number) : string {
 	}
 
 	return output;
-/*
-  for (let ret = '', a = 1, b = 26; (num -= a) >= 0; a = b, b *= 26) {
-    ret = String.fromCharCode(parseInt((num % b) / a) + 65) + ret;
-  }
-  return ret;
- */
 }
 
 interface ParseConfig {
@@ -81,13 +75,20 @@ function parseTabDelim (input : String, config : ParseConfig) : ParseResult {
 	let headerNames : string[] = [];
 	if (config.firstLineHeaders) {
 		headerNames = output.shift() || [];
-	} else {
-		//get the longest array
-		const longestRow = output.reduce(function (agg : number, row : string[]) {
-			return Math.max(agg, row.length);
-		}, 0);
-		_.times(longestRow, (idx) => headerNames.push(excelColumnNameForIndex(idx + 1)));
 	}
+	//get the longest array
+	const longestRow = output.reduce(function (agg : number, row : string[]) {
+		return Math.max(agg, row.length);
+	}, 0);
+
+	if (headerNames.length < longestRow) {
+		//const excelHeaders :string []; _.times(longestRow, (idx) => headerNames.push(excelColumnNameForIndex(idx + 1)));
+		for (let idx = headerNames.length; idx < longestRow; idx++) {
+			headerNames.push(excelColumnNameForIndex(idx+1));
+		}
+
+	}
+
 
 	let headers = headerNames.map((header : string) : ParseResultColumn => ({name: header, type: 'varchar'}));
 
@@ -231,6 +232,8 @@ if (process.argv.length > 1 && process.argv[1].includes('mocha')) {
 			expect(output).to.have.keys(['data','headers']);
 			expect(output.data).to.be.an('array');
 			expect(output.data).to.have.lengthOf(11);
+			expect(output.headers).to.be.an('array').to.have.lengthOf(6);
+			expect(_.map(output.headers, 'name')).to.deep.equal(['a','b','c','d','e','f']);
 
 			//console.log(util.inspect(output));
 
@@ -273,6 +276,34 @@ null	a	January	2001-01-01	TRUE	1
 			expect(output.data[0].a).to.equal(null);
 			expect(output.data[1].c).to.equal(null);
 			expect(output.data[2].d).to.equal(null);
+		});
+
+		test('excel-columns', async function () {
+					const input = `1	2	3	4	5	6	7	8	9	10`;
+
+			const output = parseTabDelim(input, {
+				firstLineHeaders: false,
+				convertNull: false,
+				convertEmptyString: false
+			});
+
+//console.log(util.inspect(output));
+//console.log(toPgInsert(output));
+
+			expect(_.map(output.headers, 'name')).to.deep.equal(['A','B','C','D','E','F','G','H','I','J']);
+		});
+
+		test('excel-columns-filler', async function () {
+					const input = `a	b	c	d	e	f
+1	2	3	4	5	6	7	8	9	10`;
+
+			const output = parseTabDelim(input, {
+				firstLineHeaders: true,
+				convertNull: false,
+				convertEmptyString: false
+			});
+
+			expect(_.map(output.headers, 'name')).to.deep.equal(['a','b','c','d','e','f','G','H','I','J']);
 		});
 
 
